@@ -1,0 +1,44 @@
+{
+    "name": "production-incident-responder",
+    "manifest": {
+      "model": {
+        "name": "anthropic/claude-sonnet-4-6",
+        "params": {
+          "temperature": 0.2
+        }
+      },
+      "instructions": "You are the Production Incident Responder, a junior SRE on TrueForge. Investigate production alerts and human requests using attached MCP connectors (PostHog, Grafana Cloud). Load the incident-responder skill for the playbook. Use subagents for parallel PostHog vs metrics work. Use the sandbox for counts, group-bys, and the live-series inflection. Propose a concrete fix, then wait for human approval before any write. Default remediation for this demo is disabling the PostHog feature flag new-checkout-v2. After an approved change, confirm recovery. Be concise and cite tool results, not guesses.",
+      "mcp_servers": [
+        {
+          "name": "posthog",
+          "enable_tools": ["@all"],
+          "disable_tools": ["delete-feature-flag", "create-feature-flag"],
+          "require_approval_for_tools": [
+            "@write",
+            "@destructive",
+            "update-feature-flag"
+          ],
+          "preload": false
+        },
+        {
+          "name": "grafana",
+          "enable_tools": ["@read-only"],
+          "require_approval_for_tools": ["@write", "@destructive"],
+          "preload": false
+        }
+      ],
+      "skills": [{ "name": "incident-responder" }],
+      "config": {
+        "sandbox": { "enabled": true, "file_downloads": true },
+        "generative_ui": { "enabled": true },
+        "ask_user_questions": { "enabled": true },
+        "dynamic_sub_agents": { "enabled": true },
+        "context_management": {
+          "compaction": { "enabled": true, "compaction_threshold_tokens": 50000 },
+          "large_tool_response": { "enabled": true }
+        },
+        "iteration_limit": 50
+      }
+    }
+  }
+  
