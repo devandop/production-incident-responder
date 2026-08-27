@@ -1,9 +1,3 @@
-type Sample = {
-  name: string;
-  value: number;
-  labels: Record<string, string>;
-};
-
 const totals = {
   requests: 0,
   errors: 0,
@@ -11,7 +5,42 @@ const totals = {
   latencyCount: 0,
 };
 
-const samples: Sample[] = [];
+/**
+ * Formatted Influx line-protocol lines waiting to be shipped to Grafana Cloud.
+ * Lines are built at record time so a failed push can hand them straight back
+ * (see `restoreRemoteWriteLines`) without re-deriving anything.
+ */
+let pending: string[] = [];
+
+/** Drop the oldest lines rather than grow without bound if Grafana stays down. */
+const MAX_PENDING_LINES = 5000;
+
+/** Influx line protocol escapes commas, equals signs and spaces in tag keys/values. */
+function escapeTag(value: string) {
+  return value.replace(/([,=\s])/g, "\\$1");
+}
+
+/** Same, minus `=`, for the measurement name. */
+function escapeMeasurement(value: string) {
+  return value.replace(/([,\s])/g, "\\$1");
+}
+
+function line(
+  name: string,
+  value: number,
+  labels: Record<string, string>,
+  timestampMs: number,
+) {
+  const tags = Object.entries(labels)
+    .map(([k, v]) => `${escapeTag(k)}=${escapeTag(v)}`)
+    .join(",");
+  const measurement = tags
+    ? `${escapeMeasurement(name)},${tags}`
+    : escapeMeasurement(name);
+  // Influx defaults to nanosecond precision; append zeros instead of
+  // multiplying so we never lose precision through a float.
+  return `${measurement} value=${value} ${timestampMs}000000`;
+}
 
 export function recordCheckout(input: { ok: boolean; latencyMs: number }) {
   totals.requests += 1;
@@ -19,23 +48,21 @@ export function recordCheckout(input: { ok: boolean; latencyMs: number }) {
   totals.latencySumMs += input.latencyMs;
   totals.latencyCount += 1;
 
-  samples.push(
-    {
-      name: "checkout_requests_total",
-      value: 1,
-      labels: { status: input.ok ? "success" : "error" },
-    },
-    {
-      name: "checkout_errors_total",
-      value: input.ok ? 0 : 1,
-      labels: {},
-    },
-    {
-      name: "checkout_latency_seconds",
-      value: input.latencyMs / 1000,
-      labels: {},
-    },
+  // Stamp every sample from one checkout with the same instant so the agent's
+  // inflection analysis sees them as a single event.
+  const at = Date.now();
+
+  pending.push(
+    line("checkout_requests_total", 1, { status: input.ok ? "success" : "error" }, at),
+    line("checkout_latency_seconds", input.latencyMs / 1000, {}, at),
   );
+  if (!input.ok) {
+    pending.push(line("checkout_errors_total", 1, {}, at));
+  }
+
+  if (pending.length > MAX_PENDING_LINES) {
+    pending = pending.slice(-MAX_PENDING_LINES);
+  }
 }
 
 export function prometheusText(): string {
@@ -61,13 +88,14 @@ export function prometheusText(): string {
 }
 
 export function drainRemoteWriteLines(): string[] {
-  const lines = samples.splice(0).flatMap((s) => {
-    if (s.name === "checkout_errors_total" && s.value === 0) return [];
-    const labelStr = Object.entries(s.labels)
-      .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
-      .join(",");
-    const metric = labelStr ? `${s.name},${labelStr}` : s.name;
-    return [`${metric} value=${s.value}`];
-  });
-  return lines;
+  return pending.splice(0);
+}
+
+/**
+ * Put drained lines back after a failed push, ahead of anything recorded since,
+ * so a transient Grafana error doesn't silently erase incident data.
+ */
+export function restoreRemoteWriteLines(lines: string[]) {
+  if (lines.length === 0) return;
+  pending = [...lines, ...pending].slice(-MAX_PENDING_LINES);
 }
