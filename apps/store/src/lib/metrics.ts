@@ -15,6 +15,19 @@ let pending: string[] = [];
 /** Drop the oldest lines rather than grow without bound if Grafana stays down. */
 const MAX_PENDING_LINES = 5000;
 
+/**
+ * Keep timestamps unique and monotonic for each metric series.
+ * Date.now() only has millisecond precision, so multiple checkouts can
+ * otherwise receive the same timestamp during burst traffic.
+ */
+let lastTimestampMs = 0;
+
+function nextTimestampMs() {
+  const now = Date.now();
+  lastTimestampMs = Math.max(now, lastTimestampMs + 1);
+  return lastTimestampMs;
+}
+
 /** Influx line protocol escapes commas, equals signs and spaces in tag keys/values. */
 function escapeTag(value: string) {
   return value.replace(/([,=\s])/g, "\\$1");
@@ -37,6 +50,7 @@ function line(
   const measurement = tags
     ? `${escapeMeasurement(name)},${tags}`
     : escapeMeasurement(name);
+
   // Influx defaults to nanosecond precision; append zeros instead of
   // multiplying so we never lose precision through a float.
   return `${measurement} value=${value} ${timestampMs}000000`;
@@ -50,12 +64,18 @@ export function recordCheckout(input: { ok: boolean; latencyMs: number }) {
 
   // Stamp every sample from one checkout with the same instant so the agent's
   // inflection analysis sees them as a single event.
-  const at = Date.now();
+  const at = nextTimestampMs();
 
   pending.push(
-    line("checkout_requests_total", 1, { status: input.ok ? "success" : "error" }, at),
+    line(
+      "checkout_requests_total",
+      1,
+      { status: input.ok ? "success" : "error" },
+      at,
+    ),
     line("checkout_latency_seconds", input.latencyMs / 1000, {}, at),
   );
+
   if (!input.ok) {
     pending.push(line("checkout_errors_total", 1, {}, at));
   }
@@ -68,8 +88,11 @@ export function recordCheckout(input: { ok: boolean; latencyMs: number }) {
 export function prometheusText(): string {
   const errorRate =
     totals.requests === 0 ? 0 : totals.errors / totals.requests;
+
   const avgLatency =
-    totals.latencyCount === 0 ? 0 : totals.latencySumMs / totals.latencyCount / 1000;
+    totals.latencyCount === 0
+      ? 0
+      : totals.latencySumMs / totals.latencyCount / 1000;
 
   return [
     "# HELP checkout_requests_total Checkout attempts",
