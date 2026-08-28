@@ -1,26 +1,68 @@
 import { useState } from "react";
 import { labelForTool } from "../lib/toolmeta";
-import type { PendingApproval } from "../lib/types";
+import type { PendingApproval, StagedDecision } from "../lib/types";
 
 /**
  * The control checkpoint. This is the screen the Control & Safety criterion is
  * judged on, so it is deliberately the loudest thing on the page: amber rail,
  * amber "human approval required" flag, and a full-width primary action.
+ *
+ * A turn can be blocked on several calls at once; each renders its own card and
+ * must be decided individually before any of them is submitted.
  */
 export function ApprovalCard({
   pending,
+  staged,
+  index,
+  total,
   onDecide,
+  onUndo,
 }: {
   pending: PendingApproval;
-  onDecide: (decision: "allow" | "deny", reason?: string) => void;
+  staged?: StagedDecision;
+  index: number;
+  total: number;
+  onDecide: (
+    toolCallId: string,
+    decision: "allow" | "deny",
+    reason?: string,
+  ) => void;
+  onUndo: (toolCallId: string) => void;
 }) {
   const [denying, setDenying] = useState(false);
   const [reason, setReason] = useState("");
 
+  if (staged) {
+    return (
+      <div className="rounded-lg border border-line bg-panel p-3">
+        <div className="flex items-center justify-between gap-3">
+          <span className="micro">{labelForTool(pending.toolName)}</span>
+          <span
+            className={`micro ${staged.decision === "allow" ? "text-good" : "text-bad"}`}
+          >
+            {staged.decision === "allow" ? "APPROVED" : "DENIED"} · SUBMITTING
+          </span>
+        </div>
+        {staged.reason && (
+          <div className="receipt mt-1">Reason: {staged.reason}</div>
+        )}
+        <button
+          type="button"
+          onClick={() => onUndo(pending.toolCallId)}
+          className="mt-2 text-[11px] text-ink-mute underline transition hover:text-ink"
+        >
+          Undo
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-lg border border-warn/40 border-l-4 border-l-warn bg-warn/[0.04] p-4">
       <div className="flex items-start justify-between gap-3">
-        <div className="micro text-warn">PROPOSED ACTION</div>
+        <div className="micro text-warn">
+          PROPOSED ACTION{total > 1 ? ` ${index + 1}/${total}` : ""}
+        </div>
         <div className="micro flex items-center gap-1.5 text-warn">
           <span className="live-dot h-1.5 w-1.5 rounded-full bg-warn" />
           HUMAN APPROVAL REQUIRED
@@ -57,11 +99,11 @@ export function ApprovalCard({
 
       {denying ? (
         <div className="mt-4">
-          <label className="micro" htmlFor="deny-reason">
+          <label className="micro" htmlFor={`deny-${pending.toolCallId}`}>
             REASON SHOWN TO THE AGENT
           </label>
           <input
-            id="deny-reason"
+            id={`deny-${pending.toolCallId}`}
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             placeholder="Why are you rejecting this?"
@@ -70,7 +112,9 @@ export function ApprovalCard({
           <div className="mt-2 flex gap-2">
             <button
               type="button"
-              onClick={() => onDecide("deny", reason.trim() || undefined)}
+              onClick={() =>
+                onDecide(pending.toolCallId, "deny", reason.trim() || undefined)
+              }
               className="flex-1 rounded bg-bad px-3 py-2 text-sm font-semibold text-ground transition hover:opacity-90"
             >
               Confirm denial
@@ -88,7 +132,7 @@ export function ApprovalCard({
         <div className="mt-4 flex gap-2">
           <button
             type="button"
-            onClick={() => onDecide("allow")}
+            onClick={() => onDecide(pending.toolCallId, "allow")}
             className="flex-1 rounded bg-accent px-4 py-2.5 text-sm font-bold tracking-wide text-ground uppercase transition hover:brightness-110"
           >
             Approve &amp; run →

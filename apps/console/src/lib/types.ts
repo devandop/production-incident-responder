@@ -27,6 +27,8 @@ export type ChatMessage = {
   role: "user" | "agent";
   text: string;
   at: string;
+  /** True while assembled from deltas and not yet finalised. */
+  streaming?: boolean;
 };
 
 /** A tool call the agent is blocked on, waiting for a human decision. */
@@ -37,6 +39,12 @@ export type PendingApproval = {
   toolName: string;
   args: string;
   at: string;
+};
+
+/** A decision staged locally but not yet accepted by the backend. */
+export type StagedDecision = {
+  decision: "allow" | "deny";
+  reason?: string;
 };
 
 export type ApprovalOutcome = {
@@ -53,3 +61,9 @@ export type ConnectionState =
   | { status: "streaming" }
   | { status: "awaiting-approval" }
   | { status: "disconnected"; error: string };
+
+/** A non-fatal condition worth surfacing without tearing down the session. */
+export type Notice = {
+  kind: "error" | "cancelled";
+  text: string;
+};

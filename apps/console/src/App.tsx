@@ -17,10 +17,14 @@ export default function App() {
     messages,
     trace,
     pending,
+    staged,
     outcomes,
+    notice,
     incidentId,
     send,
     decide,
+    unstage,
+    retry,
   } = useIncidentSession();
   const [reportOpen, setReportOpen] = useState(false);
 
@@ -47,8 +51,12 @@ export default function App() {
           messages={messages}
           connection={connection}
           pending={pending}
+          staged={staged}
+          notice={notice}
           onSend={send}
           onDecide={decide}
+          onUndo={unstage}
+          onRetry={retry}
         />
         <aside className="flex w-[360px] flex-shrink-0 flex-col bg-panel">
           <AgentTrace trace={trace} />
