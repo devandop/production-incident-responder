@@ -16,21 +16,60 @@ function time(at: string) {
   });
 }
 
-function Empty({ connection }: { connection: ConnectionState }) {
-  if (connection.status === "disconnected") {
+/**
+ * A failed session is not always an unreachable server. Distinguish the cases,
+ * because "restart TrueForge" is the wrong instruction when it is already up
+ * and the agent simply has not been registered.
+ */
+function Diagnosis({ error }: { error: string }) {
+  const agentMissing = /agent not found/i.test(error);
+  const answered = /status code:\s*\d/i.test(error);
+
+  if (agentMissing) {
     return (
-      <div className="rounded-lg border border-bad/30 bg-bad/[0.04] p-4">
-        <div className="micro text-bad">TRUEFORGE UNREACHABLE</div>
+      <div className="rounded-lg border border-warn/40 bg-warn/[0.04] p-4">
+        <div className="micro text-warn">AGENT NOT REGISTERED</div>
         <p className="mt-2 text-[13px] leading-relaxed text-ink-dim">
-          The console talks to a TrueForge instance — nothing is simulated here,
-          so there is no transcript to show until one is running.
+          TrueForge is running, but it has no agent by this name yet. Register
+          the manifest, then reload this page.
         </p>
+        <pre className="receipt mt-3 overflow-x-auto rounded border border-line bg-ground/60 p-2.5">
+          curl -X POST localhost:8790/api/v1/agents \
+  -H 'content-type: application/json' \
+  -d @agent/manifest.json
+        </pre>
+        <p className="receipt mt-2">
+          The model provider must be configured in TrueForge first, or the
+          manifest is rejected.
+        </p>
+        <p className="receipt mt-2">{error}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border border-bad/30 bg-bad/[0.04] p-4">
+      <div className="micro text-bad">
+        {answered ? "TRUEFORGE RETURNED AN ERROR" : "TRUEFORGE UNREACHABLE"}
+      </div>
+      <p className="mt-2 text-[13px] leading-relaxed text-ink-dim">
+        {answered
+          ? "The server responded, but the session could not be opened. Nothing is simulated here, so there is no transcript to show."
+          : "The console talks to a TrueForge instance — nothing is simulated here, so there is no transcript to show until one is running."}
+      </p>
+      {!answered && (
         <pre className="receipt mt-3 overflow-x-auto rounded border border-line bg-ground/60 p-2.5">
           npx @truefoundry/trueforge
         </pre>
-        <p className="receipt mt-2">{connection.error}</p>
-      </div>
-    );
+      )}
+      <p className="receipt mt-2">{error}</p>
+    </div>
+  );
+}
+
+function Empty({ connection }: { connection: ConnectionState }) {
+  if (connection.status === "disconnected") {
+    return <Diagnosis error={connection.error} />;
   }
   return (
     <div className="rounded-lg border border-line bg-panel p-4">
