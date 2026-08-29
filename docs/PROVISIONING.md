@@ -131,7 +131,7 @@ GRAFANA_CLOUD_INFLUX_TOKEN=123456:glc_xxxxxxxxxxxxxxxx
 After filling in `.env.local` and starting the store (`npm run dev` in `apps/store`):
 
 - [ ] Visit `http://localhost:3000` — page loads
-- [ ] Open PostHog → Events → verify `pageview`, `checkout_started`, `checkout_completed`/`checkout_failed` appear
+- [ ] Open PostHog → Events → verify `pageview`, `checkout_started`, `purchase_completed/payment_failed` appear
 - [ ] Open PostHog → Exceptions → trigger an error (e.g., simulate payment failure) → verify it appears
 - [ ] Open PostHog → Session Replay → verify recordings capture
 - [ ] Run `scripts/verify-provisioning.sh` — all checks pass
