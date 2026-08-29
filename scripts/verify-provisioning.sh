@@ -66,39 +66,51 @@ for var in "${REQUIRED_VARS[@]}"; do
   fi
 done
 
-# 3. Validate key prefixes
+# 3. Validate key prefixes and formats
 
-POSTHOG_KEY=$(grep -E "^NEXT_PUBLIC_POSTHOG_KEY=" "$ENV_FILE" | cut -d'=' -f2-)
+# grep may return exit code 1 when the variable is missing.
+# || true prevents set -e from terminating the verifier.
+POSTHOG_KEY=$(grep -E "^NEXT_PUBLIC_POSTHOG_KEY=" "$ENV_FILE" | cut -d'=' -f2- || true)
 
-if [[ "$POSTHOG_KEY" == phc_* ]]; then
-  check_pass "NEXT_PUBLIC_POSTHOG_KEY uses phc_ prefix (project API key)"
+# Only validate the prefix when the variable was found.
+if [[ -n "$POSTHOG_KEY" ]]; then
+  if [[ "$POSTHOG_KEY" == phc_* ]]; then
+    check_pass "NEXT_PUBLIC_POSTHOG_KEY uses phc_ prefix (project API key)"
 
-elif [[ "$POSTHOG_KEY" == phx_* ]]; then
-  check_fail "NEXT_PUBLIC_POSTHOG_KEY uses phx_ prefix — this is a PERSONAL key, must use phc_ PROJECT key"
+  elif [[ "$POSTHOG_KEY" == phx_* ]]; then
+    check_fail "NEXT_PUBLIC_POSTHOG_KEY uses phx_ prefix — this is a PERSONAL key, must use phc_ PROJECT key"
 
-else
-  check_warn "NEXT_PUBLIC_POSTHOG_KEY doesn't match expected phc_ prefix"
+  else
+    check_warn "NEXT_PUBLIC_POSTHOG_KEY doesn't match expected phc_ prefix"
+  fi
 fi
 
-GRAFANA_TOKEN=$(grep -E "^GRAFANA_CLOUD_INFLUX_TOKEN=" "$ENV_FILE" | cut -d'=' -f2-)
+# grep may return exit code 1 when the variable is missing.
+GRAFANA_TOKEN=$(grep -E "^GRAFANA_CLOUD_INFLUX_TOKEN=" "$ENV_FILE" | cut -d'=' -f2- || true)
 
-if [[ "$GRAFANA_TOKEN" == *:* ]]; then
-  check_pass "GRAFANA_CLOUD_INFLUX_TOKEN format looks correct (instance_id:token)"
-
-else
-  check_warn "GRAFANA_CLOUD_INFLUX_TOKEN should be 'instance_id:metrics_write_token'"
+# Only validate the format when the variable was found.
+if [[ -n "$GRAFANA_TOKEN" ]]; then
+  if [[ "$GRAFANA_TOKEN" == *:* ]]; then
+    check_pass "GRAFANA_CLOUD_INFLUX_TOKEN format looks correct (instance_id:token)"
+  else
+    check_warn "GRAFANA_CLOUD_INFLUX_TOKEN should be 'instance_id:metrics_write_token'"
+  fi
 fi
 
-GRAFANA_URL=$(grep -E "^GRAFANA_CLOUD_INFLUX_URL=" "$ENV_FILE" | cut -d'=' -f2-)
+# grep may return exit code 1 when the variable is missing.
+GRAFANA_URL=$(grep -E "^GRAFANA_CLOUD_INFLUX_URL=" "$ENV_FILE" | cut -d'=' -f2- || true)
 
-if [[ "$GRAFANA_URL" == */api/v1/push/influx/write ]]; then
-  check_pass "GRAFANA_CLOUD_INFLUX_URL uses Influx path /api/v1/push/influx/write"
+# Only validate the URL when the variable was found.
+if [[ -n "$GRAFANA_URL" ]]; then
+  if [[ "$GRAFANA_URL" == */api/v1/push/influx/write ]]; then
+    check_pass "GRAFANA_CLOUD_INFLUX_URL uses Influx path /api/v1/push/influx/write"
 
-elif [[ "$GRAFANA_URL" == */api/prom/push ]]; then
-  check_fail "GRAFANA_CLOUD_INFLUX_URL uses old Prometheus path /api/prom/push — must use /api/v1/push/influx/write"
+  elif [[ "$GRAFANA_URL" == */api/prom/push ]]; then
+    check_fail "GRAFANA_CLOUD_INFLUX_URL uses old Prometheus path /api/prom/push — must use /api/v1/push/influx/write"
 
-else
-  check_warn "GRAFANA_CLOUD_INFLUX_URL path unrecognized"
+  else
+    check_warn "GRAFANA_CLOUD_INFLUX_URL path unrecognized"
+  fi
 fi
 
 echo
