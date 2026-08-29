@@ -1,39 +1,63 @@
-# Agent Setup Guide
+# Agent Setup Instructions
 
-> **Note:** This file is new on branch `feat/github-mcp-readonly`. The PR that creates it has not merged to `main` yet — expect a merge conflict when both PRs land.
+## 1. Add Daytona API Key in TrueForge UI
 
-## Connect GitHub via OAuth (Optional)
+1. Open TrueForge UI at `http://localhost:8790`
+2. Go to **Settings → Sandbox provider**
+3. Select **Daytona** as the provider
+4. Paste your Daytona API key
+5. Save
 
-The GitHub MCP connector is **optional** and strictly **read-only**. It allows the agent to reference recent commits as corroborating evidence during incident investigation.
+## 2. Enable Sandbox on the Agent
 
-### Steps to Connect
+The agent manifest already has sandbox enabled (`"sandbox": { "enabled": true, "file_downloads": true }`). The sandbox provider is configured at the **tenant level** in TrueForge UI (Settings → Sandbox provider), not in the manifest. After creating/updating the agent via API (step 3), verify in the UI:
+- Open the agent details
+- Confirm "Sandbox" shows as enabled (the provider shown will reflect your tenant-wide setting)
 
-1. Open the **TrueForge UI** → **Connector Catalog**
-2. Find **GitHub** in the catalog
-3. Click **Connect** and complete the OAuth flow (authorize the TrueForge app)
-4. Once authorized, the connector will appear in your available MCP servers
+## 3. Create/Update Agent via API
 
-### Verify Connection
-
-After connecting, verify the github entry appears in the agent config with the correct read-only guards:
+Run this exact curl command from the repo root:
 
 ```bash
-curl -s "http://localhost:8790/api/v1/agents/{agent_id}" | jq '.manifest.mcp_servers[] | select(.name=="github")'
+curl -X PUT "http://localhost:8790/api/v1/agents/production-incident-responder" \
+  -H "Content-Type: application/json" \
+  -d @agent/manifest.json
 ```
 
-Expected output:
-```json
-{
-  "name": "github",
-  "enable_tools": ["@read-only"],
-  "require_approval_for_tools": ["@write", "@destructive"],
-  "preload": false
-}
+**Note:** Uses PUT with the agent name as ID. If the agent doesn't exist, TrueForge will create it. If it exists, it will update.
+
+## 4. Verify Agent Config Was Applied
+
+Run this exact curl command:
+
+```bash
+curl -s "http://localhost:8790/api/v1/agents/production-incident-responder" | jq .
 ```
 
-**Key checks:**
-- `enable_tools` includes only `@read-only` (no write tools enabled)
-- `require_approval_for_tools` includes both `@write` and `@destructive`
-- `preload` is `false`
+Check the response for:
+- `"sandbox": {"enabled": true, "file_downloads": true}` (provider is configured tenant-wide in TrueForge UI Settings → Sandbox provider)
+- `"require_approval_for_tools": ["@write", "@destructive", "update-feature-flag"]` under the PostHog MCP server
+- `"model": {"name": "<your-actual-model>", ...}` — not a placeholder
 
-If the github entry is missing or has different values, re-check the connector catalog connection.
+## 5. Update Model Name (Optional)
+
+The current manifest has `"name": "anthropic/claude-sonnet-4-6"` which is a valid LiteLLM model identifier. **You can keep this model or replace it** with your preferred provider/model string (e.g., `anthropic/claude-3-5-sonnet-20241022`, `openai/gpt-4o`, etc.).
+
+```bash
+# Example - replace with your actual model (only if you want a different one)
+sed -i 's/"name": "anthropic\/claude-sonnet-4-6"/"name": "YOUR_PROVIDER\/YOUR_MODEL"/' agent/manifest.json
+```
+
+Then re-run step 3.
+
+## 6. Run Verification Script
+
+```bash
+./scripts/verify-agent-config.sh production-incident-responder
+```
+
+Or with custom TrueForge URL:
+
+```bash
+./scripts/verify-agent-config.sh production-incident-responder http://localhost:8790
+```

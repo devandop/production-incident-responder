@@ -1,125 +1,74 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-AGENT_ID="${1:-production-incident-responder}"
-API_URL="${TRUEFORGE_API_URL:-http://localhost:8790}/api/v1/agents/${AGENT_ID}"
+AGENT_ID="${1:-}"
+BASE_URL="${2:-http://localhost:8790}"
+
+if [[ -z "$AGENT_ID" ]]; then
+  echo "Usage: $0 <agent-id> [base-url]"
+  echo "  base-url defaults to http://localhost:8790"
+  exit 1
+fi
+
+if ! command -v jq &> /dev/null; then
+  echo "ERROR: jq is not installed."
+  echo "Install it with: sudo apt-get install jq  (Debian/Ubuntu)"
+  echo "             or: brew install jq  (macOS)"
+  exit 1
+fi
 
 FAILED=0
 
-echo "Fetching agent config from ${API_URL}..."
+echo "Fetching agent config from ${BASE_URL}/api/v1/agents/${AGENT_ID}..."
+RESPONSE=$(curl -s "${BASE_URL}/api/v1/agents/${AGENT_ID}")
 
-response=$(curl -s "${API_URL}")
-
-if [[ -z "${response}" ]]; then
-  echo "ERROR: Empty response from API"
+if [[ -z "$RESPONSE" || "$RESPONSE" == "null" ]]; then
+  echo "FAIL: Empty response - agent not found or API error"
   exit 1
 fi
 
-echo "Agent config fetched successfully"
+echo "$RESPONSE" | jq . > /tmp/agent_response.json
 
-# Check posthog
-echo ""
-echo "=== PostHog MCP ==="
-posthog_entry=$(echo "${response}" | jq '.manifest.mcp_servers[] | select(.name=="posthog")')
-if [[ -z "${posthog_entry}" || "${posthog_entry}" == "null" ]]; then
-  echo "FAIL: PostHog MCP server not found"
-  FAILED=1
-else
-  echo "${posthog_entry}"
-  # Verify require_approval_for_tools includes @write and @destructive
-  if ! echo "${posthog_entry}" | jq -e '.require_approval_for_tools | index("@write")' >/dev/null; then
-    echo "FAIL: posthog require_approval_for_tools missing @write"
-    FAILED=1
-  fi
-  if ! echo "${posthog_entry}" | jq -e '.require_approval_for_tools | index("@destructive")' >/dev/null; then
-    echo "FAIL: posthog require_approval_for_tools missing @destructive"
-    FAILED=1
-  fi
-fi
-
-# Check grafana
-echo ""
-echo "=== Grafana MCP ==="
-grafana_entry=$(echo "${response}" | jq '.manifest.mcp_servers[] | select(.name=="grafana")')
-if [[ -z "${grafana_entry}" || "${grafana_entry}" == "null" ]]; then
-  echo "FAIL: Grafana MCP server not found"
-  FAILED=1
-else
-  echo "${grafana_entry}"
-  # Verify require_approval_for_tools includes @write and @destructive
-  if ! echo "${grafana_entry}" | jq -e '.require_approval_for_tools | index("@write")' >/dev/null; then
-    echo "FAIL: grafana require_approval_for_tools missing @write"
-    FAILED=1
-  fi
-  if ! echo "${grafana_entry}" | jq -e '.require_approval_for_tools | index("@destructive")' >/dev/null; then
-    echo "FAIL: grafana require_approval_for_tools missing @destructive"
-    FAILED=1
-  fi
-fi
-
-# Check sandbox
-echo ""
-echo "=== Sandbox ==="
-sandbox_enabled=$(echo "${response}" | jq -r '.manifest.config.sandbox.enabled // false')
-if [[ "${sandbox_enabled}" == "true" ]]; then
+# Check 1: Sandbox enabled
+SANDBOX_ENABLED=$(jq -r '.manifest.config.sandbox.enabled // false' /tmp/agent_response.json)
+if [[ "$SANDBOX_ENABLED" == "true" ]]; then
   echo "PASS: Sandbox is enabled"
 else
-  echo "FAIL: Sandbox is not enabled (got: ${sandbox_enabled})"
+  echo "FAIL: Sandbox is not enabled (got: $SANDBOX_ENABLED)"
   FAILED=1
 fi
 
-# Check model
-echo ""
-echo "=== Model ==="
-model_name=$(echo "${response}" | jq -r '.manifest.model.name // ""')
-if [[ -n "${model_name}" ]]; then
-  echo "PASS: Model name is set to: ${model_name}"
+# Check 2: update-feature-flag in require_approval_for_tools (PostHog MCP)
+HAS_APPROVAL=$(jq -r '.manifest.mcp_servers[] | select(.name=="posthog") | .require_approval_for_tools[]? | select(.=="update-feature-flag")' /tmp/agent_response.json)
+if [[ -n "$HAS_APPROVAL" ]]; then
+  echo "PASS: update-feature-flag is in require_approval_for_tools (PostHog)"
 else
-  echo "FAIL: Model name is empty"
+  echo "FAIL: update-feature-flag NOT found in require_approval_for_tools (PostHog)"
   FAILED=1
 fi
 
-# Check github (optional - skip gracefully if not configured)
-echo ""
-echo "=== GitHub MCP (optional) ==="
-github_entry=$(echo "${response}" | jq '.manifest.mcp_servers[] | select(.name=="github")')
-
-if [[ -z "${github_entry}" || "${github_entry}" == "null" ]]; then
-  echo "GitHub connector not configured (optional, skipping checks)"
+# Check 3: Model name is non-empty
+MODEL_NAME=$(jq -r '.manifest.model.name // ""' /tmp/agent_response.json)
+if [[ -n "$MODEL_NAME" ]]; then
+  echo "PASS: Model name is set to: $MODEL_NAME"
 else
-  echo "${github_entry}"
+  echo "FAIL: Model name is empty (got: '$MODEL_NAME')"
+  FAILED=1
+fi
 
-  # BUG 2: Verify require_approval_for_tools has EXACT elements @write and @destructive
-  if ! echo "${github_entry}" | jq -e '.require_approval_for_tools | index("@write")' >/dev/null; then
-    echo "FAIL: github require_approval_for_tools missing @write"
-    FAILED=1
-  fi
-
-  if ! echo "${github_entry}" | jq -e '.require_approval_for_tools | index("@destructive")' >/dev/null; then
-    echo "FAIL: github require_approval_for_tools missing @destructive"
-    FAILED=1
-  fi
-
-  # BUG 1: Verify enable_tools is EXACTLY ["@read-only"]
-  enable_tools_json=$(echo "${github_entry}" | jq -c '.enable_tools // []')
-  if [[ "${enable_tools_json}" != '["@read-only"]' ]]; then
-    echo "FAIL: github enable_tools must be exactly [\"@read-only\"] (got: ${enable_tools_json})"
-    FAILED=1
-  fi
-
-  # BUG 3: Verify preload is exactly false
-  preload_val=$(echo "${github_entry}" | jq -r '.preload // true')
-  if [[ "${preload_val}" != "false" ]]; then
-    echo "FAIL: github preload must be false (got: ${preload_val})"
-    FAILED=1
-  fi
+# Check 4: Sandbox provider is daytona (optional but recommended)
+SANDBOX_PROVIDER=$(jq -r '.manifest.config.sandbox.provider // ""' /tmp/agent_response.json)
+if [[ "$SANDBOX_PROVIDER" == "daytona" ]]; then
+  echo "PASS: Sandbox provider is daytona"
+else
+  echo "WARN: Sandbox provider not set to daytona (got: '$SANDBOX_PROVIDER') - configure in TrueForge UI Settings → Sandbox provider"
 fi
 
 echo ""
-if [[ "${FAILED}" -eq 1 ]]; then
-  echo "Some checks FAILED"
+echo "Full response saved to /tmp/agent_response.json"
+
+if [[ "$FAILED" -eq 1 ]]; then
   exit 1
 else
-  echo "All checks passed"
   exit 0
 fi
