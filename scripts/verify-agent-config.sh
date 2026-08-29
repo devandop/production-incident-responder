@@ -17,6 +17,8 @@ if ! command -v jq &> /dev/null; then
   exit 1
 fi
 
+FAILED=0
+
 echo "Fetching agent config from ${BASE_URL}/api/v1/agents/${AGENT_ID}..."
 RESPONSE=$(curl -s "${BASE_URL}/api/v1/agents/${AGENT_ID}")
 
@@ -33,6 +35,7 @@ if [[ "$SANDBOX_ENABLED" == "true" ]]; then
   echo "PASS: Sandbox is enabled"
 else
   echo "FAIL: Sandbox is not enabled (got: $SANDBOX_ENABLED)"
+  FAILED=1
 fi
 
 # Check 2: update-feature-flag in require_approval_for_tools (PostHog MCP)
@@ -41,14 +44,16 @@ if [[ -n "$HAS_APPROVAL" ]]; then
   echo "PASS: update-feature-flag is in require_approval_for_tools (PostHog)"
 else
   echo "FAIL: update-feature-flag NOT found in require_approval_for_tools (PostHog)"
+  FAILED=1
 fi
 
-# Check 3: Model name is non-empty and not placeholder
+# Check 3: Model name is non-empty
 MODEL_NAME=$(jq -r '.manifest.model.name // ""' /tmp/agent_response.json)
-if [[ -n "$MODEL_NAME" && "$MODEL_NAME" != "anthropic/claude-sonnet-4-6" ]]; then
+if [[ -n "$MODEL_NAME" ]]; then
   echo "PASS: Model name is set to: $MODEL_NAME"
 else
-  echo "FAIL: Model name is empty or still placeholder (got: '$MODEL_NAME')"
+  echo "FAIL: Model name is empty (got: '$MODEL_NAME')"
+  FAILED=1
 fi
 
 # Check 4: Sandbox provider is daytona (optional but recommended)
@@ -61,3 +66,9 @@ fi
 
 echo ""
 echo "Full response saved to /tmp/agent_response.json"
+
+if [[ "$FAILED" -eq 1 ]]; then
+  exit 1
+else
+  exit 0
+fi

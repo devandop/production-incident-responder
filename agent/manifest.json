@@ -29,7 +29,7 @@
       ],
       "skills": [{ "name": "incident-responder" }],
       "config": {
-        "sandbox": { "enabled": true, "file_downloads": true, "provider": "daytona" },
+        "sandbox": { "enabled": true, "file_downloads": true },
         "generative_ui": { "enabled": true },
         "ask_user_questions": { "enabled": true },
         "dynamic_sub_agents": { "enabled": true },

@@ -10,9 +10,9 @@
 
 ## 2. Enable Sandbox on the Agent
 
-The agent manifest already has sandbox enabled (`"sandbox": { "enabled": true, "file_downloads": true }`). After creating/updating the agent via API (step 3), verify in the UI:
+The agent manifest already has sandbox enabled (`"sandbox": { "enabled": true, "file_downloads": true }`). The sandbox provider is configured at the **tenant level** in TrueForge UI (Settings → Sandbox provider), not in the manifest. After creating/updating the agent via API (step 3), verify in the UI:
 - Open the agent details
-- Confirm "Sandbox" shows as enabled with Daytona provider
+- Confirm "Sandbox" shows as enabled (the provider shown will reflect your tenant-wide setting)
 
 ## 3. Create/Update Agent via API
 
@@ -35,16 +35,16 @@ curl -s "http://localhost:8790/api/v1/agents/production-incident-responder" | jq
 ```
 
 Check the response for:
-- `"sandbox": {"enabled": true, "file_downloads": true, "provider": "daytona"}` (provider may appear after UI config)
+- `"sandbox": {"enabled": true, "file_downloads": true}` (provider is configured tenant-wide in TrueForge UI Settings → Sandbox provider)
 - `"require_approval_for_tools": ["@write", "@destructive", "update-feature-flag"]` under the PostHog MCP server
 - `"model": {"name": "<your-actual-model>", ...}` — not a placeholder
 
-## 5. Update Model Name (Required)
+## 5. Update Model Name (Optional)
 
-The current manifest has `"name": "anthropic/claude-sonnet-4-6"` as a placeholder. **Before running step 3**, edit `agent/manifest.json` and replace it with your actual provider/model string (e.g., `anthropic/claude-3-5-sonnet-20241022`, `openai/gpt-4o`, etc.).
+The current manifest has `"name": "anthropic/claude-sonnet-4-6"` which is a valid LiteLLM model identifier. **You can keep this model or replace it** with your preferred provider/model string (e.g., `anthropic/claude-3-5-sonnet-20241022`, `openai/gpt-4o`, etc.).
 
 ```bash
-# Example - replace with your actual model
+# Example - replace with your actual model (only if you want a different one)
 sed -i 's/"name": "anthropic\/claude-sonnet-4-6"/"name": "YOUR_PROVIDER\/YOUR_MODEL"/' agent/manifest.json
 ```
 
