@@ -14,6 +14,11 @@ export function isEvidenceSource(kind: TraceKind): kind is EvidenceSourceKind {
   return kind === "posthog" || kind === "grafana" || kind === "sandbox";
 }
 
+/** Trace rows that represent a completed tool call, as opposed to approval bookkeeping or turn lifecycle rows. */
+export function isToolActivity(kind: TraceKind): boolean {
+  return kind !== "approval" && kind !== "lifecycle";
+}
+
 export type TraceState = "running" | "done" | "denied" | "failed";
 
 export type TraceItem = {

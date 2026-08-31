@@ -1,4 +1,10 @@
-import type { ApprovalOutcome, ChatMessage, TraceItem } from "../lib/types";
+import { isToolActivity } from "../lib/types";
+import type {
+  ApprovalOutcome,
+  ChatMessage,
+  PendingApproval,
+  TraceItem,
+} from "../lib/types";
 
 function Stat({
   label,
@@ -24,24 +30,36 @@ export function PostIncidentReport({
   trace,
   messages,
   outcomes,
+  pending,
   onClose,
 }: {
   incidentId: string | null;
   trace: TraceItem[];
   messages: ChatMessage[];
   outcomes: ApprovalOutcome[];
+  pending: PendingApproval[];
   onClose: () => void;
 }) {
-  const completed = trace.filter((t) => t.state === "done");
+  const completed = trace.filter((t) => t.state === "done" && isToolActivity(t.kind));
   const approved = outcomes.filter((o) => o.decision === "allow");
   const denied = outcomes.filter((o) => o.decision === "deny");
+  // An "allow" decision only authorizes the write; the underlying tool call
+  // (tracked under its own id, separate from the ":approval" row) still has
+  // to come back "done" before remediation actually happened.
+  const remediated = approved.filter((o) =>
+    trace.some((t) => t.id === o.toolCallId && t.state === "done"),
+  );
 
   const status =
-    approved.length > 0
+    remediated.length > 0
       ? { text: "REMEDIATED", tone: "good" as const }
-      : denied.length > 0
-        ? { text: "NO ACTION TAKEN", tone: "warn" as const }
-        : { text: "INVESTIGATED", tone: "warn" as const };
+      : pending.length > 0
+        ? { text: "AWAITING APPROVAL", tone: "warn" as const }
+        : approved.length > 0
+          ? { text: "AWAITING CONFIRMATION", tone: "warn" as const }
+          : denied.length > 0
+            ? { text: "NO ACTION TAKEN", tone: "warn" as const }
+            : { text: "INVESTIGATED", tone: "warn" as const };
 
   const rootCause =
     [...messages].reverse().find((m) => m.role === "agent")?.text ?? null;
@@ -86,12 +104,25 @@ export function PostIncidentReport({
           </p>
 
           <h3 className="mt-5 text-sm font-semibold">Action taken</h3>
-          {outcomes.length === 0 ? (
+          {outcomes.length === 0 && pending.length === 0 ? (
             <p className="mt-1.5 text-[13px] text-ink-dim">
               No write was proposed, so nothing required approval.
             </p>
           ) : (
             <ul className="mt-1.5 space-y-2">
+              {pending.map((p) => (
+                <li
+                  key={p.toolCallId}
+                  className="rounded border border-line bg-raised px-3 py-2"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="mono text-[12px] text-ink">
+                      {p.toolName}
+                    </span>
+                    <span className="micro text-warn">AWAITING APPROVAL</span>
+                  </div>
+                </li>
+              ))}
               {outcomes.map((o) => (
                 <li
                   key={o.toolCallId}

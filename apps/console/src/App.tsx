@@ -74,6 +74,7 @@ export default function App() {
           trace={trace}
           messages={messages}
           outcomes={outcomes}
+          pending={pending}
           onClose={() => setReportOpen(false)}
         />
       )}
