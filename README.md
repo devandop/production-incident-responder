@@ -4,6 +4,34 @@ An SRE agent on [TrueForge](https://trueforge.dev) that combines **PostHog** use
 
 Pitch: *An SRE agent that combines PostHog user impact with Grafana system metrics, investigates inside a sandbox, and only acts after human approval — built entirely on the TrueForge harness.*
 
+<!-- ───────────────────────────────────────────────────────────────────────
+     DRAFT — DO NOT MERGE WHILE «…» PLACEHOLDERS REMAIN.
+     Fill every «…» from the real Qodo thread on PR #11, then delete this
+     comment. Check with:  grep -n '«' README.md   (empty output = clean)
+     ─────────────────────────────────────────────────────────────────── -->
+
+## Qodo Code Review Evidence
+
+Every substantive change in this repo goes through a pull request reviewed by
+[Qodo](https://qodo.ai) before it merges. Direct pushes to `main` are not
+treated as reviewed work.
+
+**Reviewed PR:** [#11 — Fix Grafana Cloud metric writes so the agent sees real incident data](https://github.com/devandop/production-incident-responder/pull/11)
+
+That PR fixes the store's Influx line-protocol writer, which was emitting
+JSON-quoted tag values (`status="success"`), so Grafana stored the label with
+the quotes and the agent's success/error split never matched.
+
+Qodo's review surfaced «ONE-LINE SUMMARY OF WHAT QODO ACTUALLY FLAGGED». We
+«fixed it in COMMIT_SHA / dismissed it because REASON», and Qodo's follow-up
+review on the updated diff is «LINK TO THE SECOND REVIEW COMMENT».
+
+| Round | What Qodo raised | What we did |
+|-------|------------------|-------------|
+| [First review](«LINK») | «finding» | «Fixed in `«sha»`» |
+| [First review](«LINK») | «finding» | «Dismissed — «reason», stated in the thread» |
+| [Re-review](«LINK») | «what the follow-up pass said» | «outcome» |
+
 ## Architecture
 
 ```
