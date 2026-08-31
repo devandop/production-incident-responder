@@ -1,4 +1,4 @@
-import type { ApprovalOutcome, TraceItem } from "../lib/types";
+import { isEvidenceSource, type ApprovalOutcome, type TraceItem } from "../lib/types";
 
 export function EvidenceSummary({
   trace,
@@ -10,7 +10,8 @@ export function EvidenceSummary({
   lastAgentText: string | null;
 }) {
   const completed = trace.filter((t) => t.state === "done");
-  const sources = new Set(completed.map((t) => t.kind));
+  const evidence = completed.filter((t) => isEvidenceSource(t.kind));
+  const sources = new Set(evidence.map((t) => t.kind));
   const approved = outcomes.filter((o) => o.decision === "allow").length;
 
   return (

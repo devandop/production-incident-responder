@@ -7,6 +7,13 @@ export type TraceKind =
   | "message"
   | "lifecycle";
 
+/** Trace categories that represent actual investigative evidence, as opposed to control/lifecycle activity. */
+export type EvidenceSourceKind = "posthog" | "grafana" | "sandbox";
+
+export function isEvidenceSource(kind: TraceKind): kind is EvidenceSourceKind {
+  return kind === "posthog" || kind === "grafana" || kind === "sandbox";
+}
+
 export type TraceState = "running" | "done" | "denied" | "failed";
 
 export type TraceItem = {
