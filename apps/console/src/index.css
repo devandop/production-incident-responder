@@ -1,5 +1,23 @@
 @import "tailwindcss";
 
+@theme {
+  --color-ground: #080c11;
+  --color-panel: #0d131a;
+  --color-raised: #121a23;
+  --color-line: #1b2734;
+  --color-line-soft: #151f2a;
+
+  --color-ink: #e8eef4;
+  --color-ink-dim: #9bacbd;
+  --color-ink-mute: #6b7d8f;
+
+  --color-accent: #38bdf8;
+  --color-accent-deep: #0b5f7d;
+  --color-warn: #f5a524;
+  --color-good: #34d399;
+  --color-bad: #f87171;
+}
+
 html,
 body,
 #root {
@@ -9,73 +27,52 @@ body,
 
 body {
   font-family: ui-sans-serif, system-ui, sans-serif;
-  background: #0b0f14;
-  color: #e8eef4;
+  background: var(--color-ground);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
 }
 
-.shell {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 100dvh;
+/* The reference leans on a tiny tracked-out uppercase label above every value. */
+.micro {
+  font-size: 10px;
+  line-height: 1.2;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-ink-mute);
+  font-weight: 600;
 }
 
-.chrome {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  flex-shrink: 0;
-  padding: 0.65rem 1rem;
-  border-bottom: 1px solid #1e2a36;
-  background: #111820;
-  z-index: 2;
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
-.chrome .muted {
-  color: #8aa0b5;
-  font-size: 0.85rem;
+/* Raw tool payloads are shown as receipts — deliberately small and dim. */
+.receipt {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--color-ink-mute);
+  word-break: break-all;
 }
 
-.chrome code {
-  font-size: 0.8rem;
+.scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line) transparent;
+}
+.scroll-thin::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.scroll-thin::-webkit-scrollbar-thumb {
+  background: var(--color-line);
+  border-radius: 999px;
 }
 
-.chrome nav {
-  display: flex;
-  gap: 1rem;
+@keyframes pulse-ring {
+  0% { opacity: 1; }
+  50% { opacity: 0.35; }
+  100% { opacity: 1; }
 }
-
-.chrome a {
-  color: #9ec5ff;
-  text-decoration: none;
-  font-size: 0.9rem;
-}
-
-.chrome a:hover {
-  text-decoration: underline;
-}
-
-.chat {
-  flex: 1;
-  min-height: 0;
-  height: 100%;
-}
-
-.chat-frame {
-  flex: 1;
-  min-height: 0;
-  width: 100%;
-  border: 0;
-  background: #0b0f14;
-}
-
-.crash {
-  margin: 1rem;
-  padding: 1rem;
-  white-space: pre-wrap;
-  color: #ffb4b4;
-  background: #1a1010;
-  border-radius: 8px;
-  overflow: auto;
+.live-dot {
+  animation: pulse-ring 1.8s ease-in-out infinite;
 }
